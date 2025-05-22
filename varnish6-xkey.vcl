@@ -1,7 +1,4 @@
-# A number of these changes come form the following PR's; , combines changes in https://github.com/magento/magento2/pull/29360, https://github.com/magento/magento2/pull/28944 and https://github.com/magento/magento2/pull/28894, https://github.com/magento/magento2/pull/35228, https://github.com/magento/magento2/pull/36524, https://github.com/magento/magento2/pull/34323
-# VCL version 5.0 is not supported so it should be 4.0 even though actually used Varnish version is 6
-
-# See the non-Xkey version here: https://gist.github.com/peterjaap/006169c5d95eeffde3a1cc062de1b514
+# Optimized VCL for Magento 2
 
 vcl 4.1;
 
@@ -71,11 +68,16 @@ sub vcl_recv {
             } else {
                 set req.http.n-gone = xkey.purge("all");
             }
+            return (synth(200, "Invalidated " + req.http.n-gone + " objects (full flush)"));
         } elseif (req.http.X-Magento-Tags-Pattern) {
             # replace "((^|,)cat_c(,|$))|((^|,)cat_p(,|$))" to be "cat_c,cat_p"
             set req.http.X-Magento-Tags-Pattern = regsuball(req.http.X-Magento-Tags-Pattern, "[^a-zA-Z0-9_-]+" ,",");
             set req.http.X-Magento-Tags-Pattern = regsuball(req.http.X-Magento-Tags-Pattern, "(^,*)|(,*$)" ,"");
-            set req.http.n-gone = xkey.softpurge(req.http.X-Magento-Tags-Pattern);
+            if ( 1 ) { # CONFIGURABLE: Use softpurge
+                set req.http.n-gone = xkey.softpurge(req.http.X-Magento-Tags-Pattern);
+            } else {
+                set req.http.n-gone = xkey.purge(req.http.X-Magento-Tags-Pattern);
+            }
             return (synth(200, "Invalidated " + req.http.n-gone + " objects"));
         }
 
@@ -110,11 +112,13 @@ sub vcl_recv {
     cookie.parse(req.http.cookie);
 
     # Add support for Prismic preview functionality
+    # TODO MAKE CONFIGURABLE, DO NOT HARD-CODE PRISMIC HOST
     if (cookie.isset("io.prismic.preview")) {
         return (pass);
     }
 
     # Remove all marketing get parameters to minimize the cache objects
+    # TODO MAKE CONFIGURABLE
     if (req.url ~ "(\?|&)(_branch_match_id|srsltid|_bta_c|_bta_tid|_ga|_gl|_ke|_kx|campid|cof|customid|cx|dclid|dm_i|ef_id|epik|fbclid|gad_source|gbraid|gclid|gclsrc|gdffi|gdfms|gdftrk|hsa_acc|hsa_ad|hsa_cam|hsa_grp|hsa_kw|hsa_mt|hsa_net|hsa_src|hsa_tgt|hsa_ver|ie|igshid|irclickid|matomo_campaign|matomo_cid|matomo_content|matomo_group|matomo_keyword|matomo_medium|matomo_placement|matomo_source|mc_cid|mc_eid|mkcid|mkevt|mkrid|mkwid|msclkid|mtm_campaign|mtm_cid|mtm_content|mtm_group|mtm_keyword|mtm_medium|mtm_placement|mtm_source|nb_klid|ndclid|origin|pcrid|piwik_campaign|piwik_keyword|piwik_kwd|pk_campaign|pk_keyword|pk_kwd|redirect_log_mongo_id|redirect_mongo_id|rtid|sb_referer_host|ScCid|si|siteurl|s_kwcid|sms_click|sms_source|sms_uph|toolid|trk_contact|trk_module|trk_msg|trk_sid|ttclid|twclid|utm_campaign|utm_content|utm_creative_format|utm_id|utm_marketing_tactic|utm_medium|utm_source|utm_source_platform|utm_term|wbraid|yclid|zanpid|mc_[a-z]+|utm_[a-z]+|_bta_[a-z]+)=") {
         set req.url = regsuball(req.url, "(_branch_match_id|srsltid|_bta_c|_bta_tid|_ga|_gl|_ke|_kx|campid|cof|customid|cx|dclid|dm_i|ef_id|epik|fbclid|gad_source|gbraid|gclid|gclsrc|gdffi|gdfms|gdftrk|hsa_acc|hsa_ad|hsa_cam|hsa_grp|hsa_kw|hsa_mt|hsa_net|hsa_src|hsa_tgt|hsa_ver|ie|igshid|irclickid|matomo_campaign|matomo_cid|matomo_content|matomo_group|matomo_keyword|matomo_medium|matomo_placement|matomo_source|mc_cid|mc_eid|mkcid|mkevt|mkrid|mkwid|msclkid|mtm_campaign|mtm_cid|mtm_content|mtm_group|mtm_keyword|mtm_medium|mtm_placement|mtm_source|nb_klid|ndclid|origin|pcrid|piwik_campaign|piwik_keyword|piwik_kwd|pk_campaign|pk_keyword|pk_kwd|redirect_log_mongo_id|redirect_mongo_id|rtid|sb_referer_host|ScCid|si|siteurl|s_kwcid|sms_click|sms_source|sms_uph|toolid|trk_contact|trk_module|trk_msg|trk_sid|ttclid|twclid|utm_campaign|utm_content|utm_creative_format|utm_id|utm_marketing_tactic|utm_medium|utm_source|utm_source_platform|utm_term|wbraid|yclid|zanpid|mc_[a-z]+|utm_[a-z]+|_bta_[a-z]+)=[-_A-z0-9+(){}%.]+&?", "");
         set req.url = regsub(req.url, "[?|&]+$", "");
@@ -122,7 +126,7 @@ sub vcl_recv {
 
     # Media files caching
     if (req.url ~ "^/(pub/)?media/") {
-        if ( 0 ) { # CONFIGURABLE: Cache media files
+        if ( 0 ) { # TODO MAKE CONFIGURABLE: Cache media files
             unset req.http.Https;
             unset req.http./* {{ ssl_offloaded_header }} */;
             unset req.http.Cookie;
@@ -133,7 +137,7 @@ sub vcl_recv {
 
     # Static files caching
     if (req.url ~ "^/(pub/)?static/") {
-        if ( 0 ) { # CONFIGURABLE: Cache static files
+        if ( 0 ) { # TODO MAKE CONFIGURABLE: Cache static files
             unset req.http.Https;
             unset req.http./* {{ ssl_offloaded_header }} */;
             unset req.http.Cookie;
@@ -157,11 +161,6 @@ sub vcl_hash {
 
     # To make sure http users don't see ssl warning
     hash_data(req.http./* {{ ssl_offloaded_header }} */);
-    
-    # To make sure http users don't see ssl warning
-    if (req.http.X-Forwarded-Proto) {
-        hash_data(req.http.X-Forwarded-Proto);
-    }
 
     /* {{ design_exceptions_code }} */
 
@@ -173,11 +172,6 @@ sub vcl_hash {
 sub process_graphql_headers {
     if (req.http.X-Magento-Cache-Id) {
         hash_data(req.http.X-Magento-Cache-Id);
-
-        # When the frontend stops sending the auth token, make sure users stop getting results cached for logged-in users
-        if (req.http.Authorization ~ "^Bearer") {
-            hash_data("Authorized");
-        }
 
         # When the frontend stops sending the auth token, make sure users stop getting results cached for logged-in users
         if (req.http.Authorization ~ "^Bearer") {
@@ -246,6 +240,9 @@ sub vcl_deliver {
     # Let browser and Cloudflare cache non-static content that are cacheable for short period of time
     if (resp.http.Cache-Control !~ "private" && req.url !~ "^/(media|static)/" && obj.ttl > 0s) {
         set resp.http.Cache-Control = "must-revalidate, max-age=60";
+        if ( 0 ) { # TODO MAKE CONFIGURABLE: Enable/disable backward-forward cache (default enabled)
+            set resp.http.Cache-Control = resp.http.Cache-Control + ", no-store";
+        }
     }
 
     unset resp.http.XKey;
