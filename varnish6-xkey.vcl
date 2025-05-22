@@ -62,7 +62,7 @@ sub vcl_recv {
     # If X-Magento-Tags-Pattern is not set, a URL-based purge is executed
     if (req.method == "PURGE") {
         if (client.ip !~ purge) {
-            return (synth(405, "Method not allowed"));
+            return (synth(405));
         }
 
         # If the X-Magento-Tags-Pattern header is not set, just use regular URL-based purge
