@@ -51,7 +51,6 @@ sub vcl_recv {
     # Remove the proxy header to mitigate the httpoxy vulnerability
     # See https://httpoxy.org/    
     unset req.http.proxy;
-
     # Reduce grace to the configured setting if the backend is healthy
     # In case of an unhealthy backend, the original grace is used
     if (std.healthy(req.backend_hint)) {
@@ -194,7 +193,6 @@ sub vcl_backend_response {
     # Serve stale content for three days after object expiration
     # Perform asynchronous revalidation while stale content is served
     set beresp.grace = 1d;
-
     if (beresp.http.X-Magento-Tags) {
         # set comma separated xkey with "all" tag
         set beresp.http.XKey = beresp.http.X-Magento-Tags + ",all";
