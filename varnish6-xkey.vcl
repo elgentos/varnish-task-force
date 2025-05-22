@@ -51,10 +51,6 @@ sub vcl_recv {
     # Sorts query string parameters alphabetically for cache normalization purposes    
     set req.url = std.querysort(req.url);
     
-    # Remove the proxy header to mitigate the httpoxy vulnerability
-    # See https://httpoxy.org/    
-    unset req.http.proxy;
-    
     # Add X-Forwarded-Proto header when using https
     if (!req.http.X-Forwarded-Proto && (std.port(server.ip) == 443 || std.port(server.ip) == 8443)) {
         set req.http.X-Forwarded-Proto = "https";
