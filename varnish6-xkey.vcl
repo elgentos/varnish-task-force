@@ -74,9 +74,8 @@ sub vcl_recv {
         if (client.ip !~ purge) {
             return (synth(405, "Method not allowed"));
         }
-        # To use the X-Pool header for purging varnish during automated deployments, make sure the X-Pool header
-        # has been added to the response in your backend server config. This is used, for example, by the
-        # capistrano-magento2 gem for purging old content from varnish during it's deploy routine.
+
+        # If the X-Magento-Tags-Pattern header is not set, just use regular URL-based purge
         if (!req.http.X-Magento-Tags-Pattern) {
             return (purge);
         }
