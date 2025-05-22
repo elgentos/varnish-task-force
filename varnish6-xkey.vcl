@@ -252,9 +252,6 @@ sub vcl_deliver {
         set resp.http.Cache-Control = "no-store, no-cache, must-revalidate";
     }
 
-    if (!resp.http.X-Magento-Debug) {
-        unset resp.http.Age;
-    }
     unset resp.http.XKey;
     unset resp.http.Expires;
     unset resp.http.Pragma;
