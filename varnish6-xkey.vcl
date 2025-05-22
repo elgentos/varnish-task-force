@@ -163,13 +163,26 @@ sub vcl_hash {
     /* {{ design_exceptions_code }} */
 
     if (req.url ~ "/graphql") {
-        if (req.http.X-Magento-Cache-Id) {
-            hash_data(req.http.X-Magento-Cache-Id);
-        } else {
-            # if no X-Magento-Cache-Id (which already contains Store & Currency) is not set, use the HTTP headers
-            hash_data(req.http.Store);
-            hash_data(req.http.Content-Currency);
+        call process_graphql_headers;
+    }
+}
+
+sub process_graphql_headers {
+    if (req.http.X-Magento-Cache-Id) {
+        hash_data(req.http.X-Magento-Cache-Id);
+
+        # When the frontend stops sending the auth token, make sure users stop getting results cached for logged-in users
+        if (req.http.Authorization ~ "^Bearer") {
+            hash_data("Authorized");
         }
+    }
+
+    if (req.http.Store) {
+        hash_data(req.http.Store);
+    }
+
+    if (req.http.Content-Currency) {
+        hash_data(req.http.Content-Currency);
     }
 }
 
