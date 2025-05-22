@@ -128,15 +128,26 @@ sub vcl_recv {
         set req.url = regsub(req.url, "[?|&]+$", "");
     }
 
-    # Static files caching
-    if (req.url ~ "^/(pub/)?(media|static)/") {
-        # Static files should not be cached by default
-        return (pass);
+    # Media files caching
+    if (req.url ~ "^/(pub/)?media/") {
+        if ( 0 ) { # CONFIGURABLE: Cache media files
+            unset req.http.Https;
+            unset req.http./* {{ ssl_offloaded_header }} */;
+            unset req.http.Cookie;
+        } else {
+            return (pass);
+        }
+    }
 
-        # But if you use a few locales and don't use CDN you can enable caching static files by commenting previous line (#return (pass);) and uncommenting next 3 lines
-        #unset req.http.Https;
-        #unset req.http./* {{ ssl_offloaded_header }} */;
-        #unset req.http.Cookie;
+    # Static files caching
+    if (req.url ~ "^/(pub/)?static/") {
+        if ( 0 ) { # CONFIGURABLE: Cache static files
+            unset req.http.Https;
+            unset req.http./* {{ ssl_offloaded_header }} */;
+            unset req.http.Cookie;
+        } else {
+            return (pass);
+        }
     }
 
     # Don't cache the authenticated GraphQL requests
