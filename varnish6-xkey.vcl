@@ -55,11 +55,6 @@ sub vcl_recv {
     # See https://httpoxy.org/    
     unset req.http.proxy;
     
-    # Add X-Forwarded-Proto header when using https
-    if (!req.http.X-Forwarded-Proto && (std.port(server.ip) == 443 || std.port(server.ip) == 8443)) {
-        set req.http.X-Forwarded-Proto = "https";
-    }
-    
     # Reduce grace to the configured setting if the backend is healthy
     # In case of an unhealthy backend, the original grace is used
     if (std.healthy(req.backend_hint)) {
