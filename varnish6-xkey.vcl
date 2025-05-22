@@ -33,11 +33,6 @@ sub vcl_recv {
     if (req.http.Cookie ~ "io.prismic.preview") {
         return (pass);
     }
-        
-    # Bypass generated sitemap files
-    if (req.url ~ "^/sitemaps/") {
-        return (pass);
-    }
 
     # Remove empty query string parameters
     # e.g.: www.example.com/index.html?    
