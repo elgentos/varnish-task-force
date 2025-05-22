@@ -206,8 +206,10 @@ sub vcl_backend_response {
         set beresp.do_esi = true;
     }
 
-    # Only cache HTTP 200 and HTTP 404 responses
+    # Cache HTTP 200 responses
+    # TODO MAKE CONFIGURABLE whether or not 404's should be cached
     if (beresp.status != 200 && beresp.status != 404) {
+    #if (beresp.status != 200) {
         set beresp.ttl = 120s;
         set beresp.uncacheable = true;
         return (deliver);
