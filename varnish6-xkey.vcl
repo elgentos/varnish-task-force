@@ -170,11 +170,6 @@ sub process_graphql_headers {
         if (req.http.Authorization ~ "^Bearer") {
             hash_data("Authorized");
         }
-
-        # When the frontend stops sending the auth token, make sure users stop getting results cached for logged-in users
-        if (req.http.Authorization ~ "^Bearer") {
-            hash_data("Authorized");
-        }
     }
 
     if (req.http.Store) {
