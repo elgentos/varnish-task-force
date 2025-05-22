@@ -1,7 +1,4 @@
-# A number of these changes come form the following PR's; , combines changes in https://github.com/magento/magento2/pull/29360, https://github.com/magento/magento2/pull/28944 and https://github.com/magento/magento2/pull/28894, https://github.com/magento/magento2/pull/35228, https://github.com/magento/magento2/pull/36524, https://github.com/magento/magento2/pull/34323
-# VCL version 5.0 is not supported so it should be 4.0 even though actually used Varnish version is 6
-
-# See the non-Xkey version here: https://gist.github.com/peterjaap/006169c5d95eeffde3a1cc062de1b514
+# Optimized VCL for Magento 2
 
 vcl 4.1;
 
