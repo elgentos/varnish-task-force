@@ -174,32 +174,19 @@ sub vcl_hash {
 }
 
 sub vcl_backend_response {
-	# Serve stale content for three days after object expiration
-	# Perform asynchronous revalidation while stale content is served
-    set beresp.grace = 3d;
+    # Serve stale content for three days after object expiration
+    # Perform asynchronous revalidation while stale content is served
+    set beresp.grace = 1d;
     
-    # using xkey
     if (beresp.http.X-Magento-Tags) {
-        set beresp.http.Grace = beresp.grace;
-        # set space separated xkey
-        set beresp.http.XKey = regsuball(beresp.http.X-Magento-Tags, ",", " ") + " all";
-        # reset beresp.http.X-Magento-Tags with some common general value
-        set beresp.http.X-Magento-Tags = "fpc";
+        # set comma separated xkey with "all" tag
+        set beresp.http.XKey = beresp.http.X-Magento-Tags + ",all";
+        unset beresp.http.X-Magento-Tags;
     }
 
     # All text-based content can be parsed as ESI
     if (beresp.http.content-type ~ "text") {
         set beresp.do_esi = true;
-    }
-
-    # Allow GZIP compression on all JavaScript files and all text-based content
-    if (bereq.url ~ "\.js$" || beresp.http.content-type ~ "text") {
-        set beresp.do_gzip = true;
-    }
-    
-    # Add debug headers
-    if (beresp.http.X-Magento-Debug) {
-        set beresp.http.X-Magento-Cache-Control = beresp.http.Cache-Control;
     }
 
     # Only cache HTTP 200 and HTTP 404 responses
