@@ -15,13 +15,13 @@ backend default {
     .host = "/* {{ host }} */";
     .port = "/* {{ port }} */";
     .first_byte_timeout = 600s;
-#    .probe = {
-#        .url = "/health_check.php";
-#        .timeout = 2s;
-#        .interval = 5s;
-#        .window = 10;
-#        .threshold = 5;
-#   }
+    .probe = {
+        .url = "/health_check.php";
+        .timeout = 2s;
+        .interval = 5s;
+        .window = 10;
+        .threshold = 5;
+   }
 }
 
 acl purge {
@@ -33,11 +33,6 @@ sub vcl_recv {
     if (req.http.Cookie ~ "io.prismic.preview") {
         return (pass);
     }
-        
-    # Bypass generated sitemap files
-    if (req.url ~ "^/sitemaps/") {
-        return (pass);
-    }
 
     # Remove empty query string parameters
     # e.g.: www.example.com/index.html?    
@@ -45,21 +40,18 @@ sub vcl_recv {
         set req.url = regsub(req.url, "\?$", "");
     }
 
-    # Remove port number from host header
-    set req.http.Host = regsub(req.http.Host, ":[0-9]+", "");
-    
+    # Remove port number from host header if set
+    if (req.http.Host ~ ":[0-9]+$") {
+        set req.http.Host = regsub(req.http.Host, ":[0-9]+$", "");
+    }
+
     # Sorts query string parameters alphabetically for cache normalization purposes    
     set req.url = std.querysort(req.url);
     
     # Remove the proxy header to mitigate the httpoxy vulnerability
     # See https://httpoxy.org/    
     unset req.http.proxy;
-    
-    # Add X-Forwarded-Proto header when using https
-    if (!req.http.X-Forwarded-Proto && (std.port(server.ip) == 443 || std.port(server.ip) == 8443)) {
-        set req.http.X-Forwarded-Proto = "https";
-    }
-    
+
     # Reduce grace to the configured setting if the backend is healthy
     # In case of an unhealthy backend, the original grace is used
     if (std.healthy(req.backend_hint)) {
@@ -72,12 +64,11 @@ sub vcl_recv {
     # If X-Magento-Tags-Pattern is not set, a URL-based purge is executed
     if (req.method == "PURGE") {
         if (client.ip !~ purge) {
-            return (synth(405, "Method not allowed"));
+            return (synth(405));
         }
-        # To use the X-Pool header for purging varnish during automated deployments, make sure the X-Pool header
-        # has been added to the response in your backend server config. This is used, for example, by the
-        # capistrano-magento2 gem for purging old content from varnish during it's deploy routine.
-        if (!req.http.X-Magento-Tags-Pattern && !req.http.X-Pool) {
+
+        # If the X-Magento-Tags-Pattern header is not set, just use regular URL-based purge
+        if (!req.http.X-Magento-Tags-Pattern) {
             return (purge);
         }
 
@@ -85,16 +76,13 @@ sub vcl_recv {
         if (req.http.X-Magento-Tags-Pattern == ".*") {
             ban("obj.http.X-Magento-Tags ~ " + req.http.X-Magento-Tags-Pattern);
         } elseif (req.http.X-Magento-Tags-Pattern) {
-            # replace "((^|,)cat_c(,|$))|((^|,)cat_p(,|$))" to be "cat_c cat_p"
-            set req.http.X-Magento-Tags-Pattern = regsuball(req.http.X-Magento-Tags-Pattern, "[^a-zA-Z0-9_-]+" ," ");
-            set req.http.X-Magento-Tags-Pattern = regsuball(req.http.X-Magento-Tags-Pattern, "(^\s*)|(\s*$)" ,"");
+            # replace "((^|,)cat_c(,|$))|((^|,)cat_p(,|$))" to be "cat_c,cat_p"
+            set req.http.X-Magento-Tags-Pattern = regsuball(req.http.X-Magento-Tags-Pattern, "[^a-zA-Z0-9_-]+" ,",");
+            set req.http.X-Magento-Tags-Pattern = regsuball(req.http.X-Magento-Tags-Pattern, "(^,*)|(,*$)" ,"");
             set req.http.n-gone = xkey.softpurge(req.http.X-Magento-Tags-Pattern);
             return (synth(200, "Invalidated " + req.http.n-gone + " objects"));
         }
 
-        if (req.http.X-Pool) {
-          ban("obj.http.X-Pool ~ " + req.http.X-Pool);
-        }
         return (synth(200, "Purged"));
     }
 
@@ -115,7 +103,7 @@ sub vcl_recv {
     }
 
     # Bypass health check requests
-    if (req.url ~ "^/(pub/)?(health_check.php)$") {
+    if (req.url == "health_check.php") {
         return (pass);
     }
 
@@ -174,43 +162,48 @@ sub vcl_hash {
     /* {{ design_exceptions_code }} */
 
     if (req.url ~ "/graphql") {
-        if (req.http.X-Magento-Cache-Id) {
-            hash_data(req.http.X-Magento-Cache-Id);
-        } else {
-            # if no X-Magento-Cache-Id (which already contains Store & Currency) is not set, use the HTTP headers
-            hash_data(req.http.Store);
-            hash_data(req.http.Content-Currency);
+        call process_graphql_headers;
+    }
+}
+
+sub process_graphql_headers {
+    if (req.http.X-Magento-Cache-Id) {
+        hash_data(req.http.X-Magento-Cache-Id);
+
+        # When the frontend stops sending the auth token, make sure users stop getting results cached for logged-in users
+        if (req.http.Authorization ~ "^Bearer") {
+            hash_data("Authorized");
         }
+
+        # When the frontend stops sending the auth token, make sure users stop getting results cached for logged-in users
+        if (req.http.Authorization ~ "^Bearer") {
+            hash_data("Authorized");
+        }
+    }
+
+    if (req.http.Store) {
+        hash_data(req.http.Store);
+    }
+
+    if (req.http.Content-Currency) {
+        hash_data(req.http.Content-Currency);
     }
 }
 
 sub vcl_backend_response {
-	# Serve stale content for three days after object expiration
-	# Perform asynchronous revalidation while stale content is served
-    set beresp.grace = 3d;
-    
-    # using xkey
+    # Serve stale content for three days after object expiration
+    # Perform asynchronous revalidation while stale content is served
+    set beresp.grace = 1d;
+
     if (beresp.http.X-Magento-Tags) {
-        set beresp.http.Grace = beresp.grace;
-        # set space separated xkey
-        set beresp.http.XKey = regsuball(beresp.http.X-Magento-Tags, ",", " ") + " all";
-        # reset beresp.http.X-Magento-Tags with some common general value
-        set beresp.http.X-Magento-Tags = "fpc";
+        # set comma separated xkey with "all" tag
+        set beresp.http.XKey = beresp.http.X-Magento-Tags + ",all";
+        unset beresp.http.X-Magento-Tags;
     }
 
     # All text-based content can be parsed as ESI
     if (beresp.http.content-type ~ "text") {
         set beresp.do_esi = true;
-    }
-
-    # Allow GZIP compression on all JavaScript files and all text-based content
-    if (bereq.url ~ "\.js$" || beresp.http.content-type ~ "text") {
-        set beresp.do_gzip = true;
-    }
-    
-    # Add debug headers
-    if (beresp.http.X-Magento-Debug) {
-        set beresp.http.X-Magento-Cache-Control = beresp.http.Cache-Control;
     }
 
     # Only cache HTTP 200 and HTTP 404 responses
@@ -233,11 +226,11 @@ sub vcl_backend_response {
         unset beresp.http.Set-Cookie;
     }
     
-   # If page is not cacheable then bypass varnish for 2 minutes as Hit-For-Pass
+   # If page is not cacheable then bypass varnish for 2 minutes as Hit-for-Miss
    if (beresp.ttl <= 0s ||
         beresp.http.Surrogate-control ~ "no-store" ||
         (!beresp.http.Surrogate-Control && beresp.http.Vary == "*")) {
-        # Mark as Hit-For-Pass for the next 2 minutes
+        # Mark as Hit-for-Miss for the next 2 minutes
         set beresp.ttl = 120s;
         set beresp.uncacheable = true;
     }
@@ -254,13 +247,8 @@ sub vcl_deliver {
     }
 
     # Let browser and Cloudflare cache non-static content that are cacheable for short period of time
-    if (resp.http.Cache-Control !~ "private" && req.url !~ "^/(pub/)?(media|static)/" && obj.ttl > 0s) {
+    if (resp.http.Cache-Control !~ "private" && req.url !~ "^/(media|static)/" && obj.ttl > 0s) {
         set resp.http.Cache-Control = "must-revalidate, max-age=60";
-    }
-    
-    # Prevent browser caching for customer and checkout pages
-    if (req.url ~ "^/(customer|checkout)(/|$)") {
-        set resp.http.Cache-Control = "no-store, no-cache, must-revalidate";
     }
 
     unset resp.http.XKey;
