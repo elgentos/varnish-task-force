@@ -233,11 +233,6 @@ sub vcl_deliver {
     if (resp.http.Cache-Control !~ "private" && req.url !~ "^/(pub/)?(media|static)/" && obj.ttl > 0s) {
         set resp.http.Cache-Control = "must-revalidate, max-age=60";
     }
-    
-    # Prevent browser caching for customer and checkout pages
-    if (req.url ~ "^/(customer|checkout)(/|$)") {
-        set resp.http.Cache-Control = "no-store, no-cache, must-revalidate";
-    }
 
     unset resp.http.XKey;
     unset resp.http.Expires;
