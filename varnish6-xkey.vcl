@@ -106,6 +106,7 @@ sub vcl_recv {
     cookie.parse(req.http.cookie);
 
     # Add support for Prismic preview functionality
+    # TODO MAKE CONFIGURABLE, DO NOT HARD-CODE PRISMIC HOST
     if (cookie.isset("io.prismic.preview")) {
         return (pass);
     }
