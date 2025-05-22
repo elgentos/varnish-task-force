@@ -43,10 +43,6 @@ sub vcl_recv {
 
     # Sorts query string parameters alphabetically for cache normalization purposes    
     set req.url = std.querysort(req.url);
-    
-    # Remove the proxy header to mitigate the httpoxy vulnerability
-    # See https://httpoxy.org/    
-    unset req.http.proxy;
 
     # Reduce grace to the configured setting if the backend is healthy
     # In case of an unhealthy backend, the original grace is used
