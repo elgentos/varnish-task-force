@@ -38,8 +38,10 @@ sub vcl_recv {
         set req.http.Host = regsub(req.http.Host, ":[0-9]+$", "");
     }
 
-    # Sorts query string parameters alphabetically for cache normalization purposes    
-    set req.url = std.querysort(req.url);
+    # Sorts query string parameters alphabetically for cache normalization purposes, only when there are multiple parameters
+    if (req.url ~ "\?.*&") {
+        set req.url = std.querysort(req.url);
+    }
 
     # Reduce grace to the configured setting if the backend is healthy
     # In case of an unhealthy backend, the original grace is used
