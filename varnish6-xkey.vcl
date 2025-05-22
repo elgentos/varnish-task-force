@@ -15,13 +15,13 @@ backend default {
     .host = "/* {{ host }} */";
     .port = "/* {{ port }} */";
     .first_byte_timeout = 600s;
-#    .probe = {
-#        .url = "/health_check.php";
-#        .timeout = 2s;
-#        .interval = 5s;
-#        .window = 10;
-#        .threshold = 5;
-#   }
+    .probe = {
+        .url = "/health_check.php";
+        .timeout = 2s;
+        .interval = 5s;
+        .window = 10;
+        .threshold = 5;
+   }
 }
 
 acl purge {
@@ -33,11 +33,6 @@ sub vcl_recv {
     if (req.http.Cookie ~ "io.prismic.preview") {
         return (pass);
     }
-        
-    # Bypass generated sitemap files
-    if (req.url ~ "^/sitemaps/") {
-        return (pass);
-    }
 
     # Remove empty query string parameters
     # e.g.: www.example.com/index.html?    
@@ -45,9 +40,11 @@ sub vcl_recv {
         set req.url = regsub(req.url, "\?$", "");
     }
 
-    # Remove port number from host header
-    set req.http.Host = regsub(req.http.Host, ":[0-9]+", "");
-    
+    # Remove port number from host header if set
+    if (req.http.Host ~ ":[0-9]+$") {
+        set req.http.Host = regsub(req.http.Host, ":[0-9]+$", "");
+    }
+
     # Sorts query string parameters alphabetically for cache normalization purposes    
     set req.url = std.querysort(req.url);
     
@@ -68,11 +65,10 @@ sub vcl_recv {
     # If X-Magento-Tags-Pattern is not set, a URL-based purge is executed
     if (req.method == "PURGE") {
         if (client.ip !~ purge) {
-            return (synth(405, "Method not allowed"));
+            return (synth(405));
         }
-        # To use the X-Pool header for purging varnish during automated deployments, make sure the X-Pool header
-        # has been added to the response in your backend server config. This is used, for example, by the
-        # capistrano-magento2 gem for purging old content from varnish during it's deploy routine.
+
+        # If the X-Magento-Tags-Pattern header is not set, just use regular URL-based purge
         if (!req.http.X-Magento-Tags-Pattern) {
             return (purge);
         }
@@ -81,9 +77,9 @@ sub vcl_recv {
         if (req.http.X-Magento-Tags-Pattern == ".*") {
             ban("obj.http.X-Magento-Tags ~ " + req.http.X-Magento-Tags-Pattern);
         } elseif (req.http.X-Magento-Tags-Pattern) {
-            # replace "((^|,)cat_c(,|$))|((^|,)cat_p(,|$))" to be "cat_c cat_p"
-            set req.http.X-Magento-Tags-Pattern = regsuball(req.http.X-Magento-Tags-Pattern, "[^a-zA-Z0-9_-]+" ," ");
-            set req.http.X-Magento-Tags-Pattern = regsuball(req.http.X-Magento-Tags-Pattern, "(^\s*)|(\s*$)" ,"");
+            # replace "((^|,)cat_c(,|$))|((^|,)cat_p(,|$))" to be "cat_c,cat_p"
+            set req.http.X-Magento-Tags-Pattern = regsuball(req.http.X-Magento-Tags-Pattern, "[^a-zA-Z0-9_-]+" ,",");
+            set req.http.X-Magento-Tags-Pattern = regsuball(req.http.X-Magento-Tags-Pattern, "(^,*)|(,*$)" ,"");
             set req.http.n-gone = xkey.softpurge(req.http.X-Magento-Tags-Pattern);
             return (synth(200, "Invalidated " + req.http.n-gone + " objects"));
         }
@@ -108,7 +104,7 @@ sub vcl_recv {
     }
 
     # Bypass health check requests
-    if (req.url ~ "^/(pub/)?(health_check.php)$") {
+    if (req.url == "health_check.php") {
         return (pass);
     }
 
@@ -122,7 +118,7 @@ sub vcl_recv {
     }
 
     # Static files caching
-    if (req.url ~ "^/(pub/)?(media|static)/") {
+    if (req.url ~ "^/(media|static)/") {
         # Static files should not be cached by default
         return (pass);
 
@@ -156,18 +152,31 @@ sub vcl_hash {
     /* {{ design_exceptions_code }} */
 
     if (req.url ~ "/graphql") {
-        if (req.http.X-Magento-Cache-Id) {
-            hash_data(req.http.X-Magento-Cache-Id);
-        } else {
-            # if no X-Magento-Cache-Id (which already contains Store & Currency) is not set, use the HTTP headers
-            hash_data(req.http.Store);
-            hash_data(req.http.Content-Currency);
+        call process_graphql_headers;
+    }
+}
+
+sub process_graphql_headers {
+    if (req.http.X-Magento-Cache-Id) {
+        hash_data(req.http.X-Magento-Cache-Id);
+
+        # When the frontend stops sending the auth token, make sure users stop getting results cached for logged-in users
+        if (req.http.Authorization ~ "^Bearer") {
+            hash_data("Authorized");
         }
 
         # When the frontend stops sending the auth token, make sure users stop getting results cached for logged-in users
         if (req.http.Authorization ~ "^Bearer") {
             hash_data("Authorized");
         }
+    }
+
+    if (req.http.Store) {
+        hash_data(req.http.Store);
+    }
+
+    if (req.http.Content-Currency) {
+        hash_data(req.http.Content-Currency);
     }
 }
 
@@ -228,7 +237,7 @@ sub vcl_deliver {
     }
 
     # Let browser and Cloudflare cache non-static content that are cacheable for short period of time
-    if (resp.http.Cache-Control !~ "private" && req.url !~ "^/(pub/)?(media|static)/" && obj.ttl > 0s) {
+    if (resp.http.Cache-Control !~ "private" && req.url !~ "^/(media|static)/" && obj.ttl > 0s) {
         set resp.http.Cache-Control = "must-revalidate, max-age=60";
     }
 
