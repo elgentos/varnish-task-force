@@ -153,11 +153,6 @@ sub vcl_hash {
 
     # To make sure http users don't see ssl warning
     hash_data(req.http./* {{ ssl_offloaded_header }} */);
-    
-    # To make sure http users don't see ssl warning
-    if (req.http.X-Forwarded-Proto) {
-        hash_data(req.http.X-Forwarded-Proto);
-    }
 
     /* {{ design_exceptions_code }} */
 
