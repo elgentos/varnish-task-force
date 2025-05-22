@@ -170,6 +170,11 @@ sub vcl_hash {
             hash_data(req.http.Store);
             hash_data(req.http.Content-Currency);
         }
+
+        # When the frontend stops sending the auth token, make sure users stop getting results cached for logged-in users
+        if (req.http.Authorization ~ "^Bearer") {
+            hash_data("Authorized");
+        }
     }
 }
 
