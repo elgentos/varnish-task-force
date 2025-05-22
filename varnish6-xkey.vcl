@@ -101,7 +101,7 @@ sub vcl_recv {
     }
 
     # Bypass health check requests
-    if (req.url ~ "^/(pub/)?(health_check.php)$") {
+    if (req.url == "health_check.php") {
         return (pass);
     }
 
@@ -115,7 +115,7 @@ sub vcl_recv {
     }
 
     # Static files caching
-    if (req.url ~ "^/(pub/)?(media|static)/") {
+    if (req.url ~ "^/(media|static)/") {
         # Static files should not be cached by default
         return (pass);
 
@@ -221,7 +221,7 @@ sub vcl_deliver {
     }
 
     # Let browser and Cloudflare cache non-static content that are cacheable for short period of time
-    if (resp.http.Cache-Control !~ "private" && req.url !~ "^/(pub/)?(media|static)/" && obj.ttl > 0s) {
+    if (resp.http.Cache-Control !~ "private" && req.url !~ "^/(media|static)/" && obj.ttl > 0s) {
         set resp.http.Cache-Control = "must-revalidate, max-age=60";
     }
 
