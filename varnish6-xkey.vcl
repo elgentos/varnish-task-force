@@ -74,10 +74,9 @@ sub vcl_recv {
         if (client.ip !~ purge) {
             return (synth(405, "Method not allowed"));
         }
-        # To use the X-Pool header for purging varnish during automated deployments, make sure the X-Pool header
-        # has been added to the response in your backend server config. This is used, for example, by the
-        # capistrano-magento2 gem for purging old content from varnish during it's deploy routine.
-        if (!req.http.X-Magento-Tags-Pattern && !req.http.X-Pool) {
+
+        # If the X-Magento-Tags-Pattern header is not set, just use regular URL-based purge
+        if (!req.http.X-Magento-Tags-Pattern) {
             return (purge);
         }
 
@@ -92,9 +91,6 @@ sub vcl_recv {
             return (synth(200, "Invalidated " + req.http.n-gone + " objects"));
         }
 
-        if (req.http.X-Pool) {
-          ban("obj.http.X-Pool ~ " + req.http.X-Pool);
-        }
         return (synth(200, "Purged"));
     }
 
@@ -170,19 +166,22 @@ sub vcl_hash {
             hash_data(req.http.Store);
             hash_data(req.http.Content-Currency);
         }
+
+        # When the frontend stops sending the auth token, make sure users stop getting results cached for logged-in users
+        if (req.http.Authorization ~ "^Bearer") {
+            hash_data("Authorized");
+        }
     }
 }
 
 sub vcl_backend_response {
-	# Serve stale content for three days after object expiration
-	# Perform asynchronous revalidation while stale content is served
-    set beresp.grace = 3d;
+    # Serve stale content for three days after object expiration
+    # Perform asynchronous revalidation while stale content is served
+    set beresp.grace = 1d;
     
-    # using xkey
     if (beresp.http.X-Magento-Tags) {
-        set beresp.http.Grace = beresp.grace;
-        # set space separated xkey
-        set beresp.http.XKey = regsuball(beresp.http.X-Magento-Tags, ",", " ") + " all";
+        # set comma separated xkey with "all" tag
+        set beresp.http.XKey = beresp.http.X-Magento-Tags + ",all";
         # remove X-Magento-Tags, no longer needed
         unset beresp.http.X-Magento-Tags;
     }
@@ -190,16 +189,6 @@ sub vcl_backend_response {
     # All text-based content can be parsed as ESI
     if (beresp.http.content-type ~ "text") {
         set beresp.do_esi = true;
-    }
-
-    # Allow GZIP compression on all JavaScript files and all text-based content
-    if (bereq.url ~ "\.js$" || beresp.http.content-type ~ "text") {
-        set beresp.do_gzip = true;
-    }
-    
-    # Add debug headers
-    if (beresp.http.X-Magento-Debug) {
-        set beresp.http.X-Magento-Cache-Control = beresp.http.Cache-Control;
     }
 
     # Only cache HTTP 200 and HTTP 404 responses
@@ -222,11 +211,11 @@ sub vcl_backend_response {
         unset beresp.http.Set-Cookie;
     }
     
-   # If page is not cacheable then bypass varnish for 2 minutes as Hit-For-Pass
+   # If page is not cacheable then bypass varnish for 2 minutes as Hit-for-Miss
    if (beresp.ttl <= 0s ||
         beresp.http.Surrogate-control ~ "no-store" ||
         (!beresp.http.Surrogate-Control && beresp.http.Vary == "*")) {
-        # Mark as Hit-For-Pass for the next 2 minutes
+        # Mark as Hit-for-Miss for the next 2 minutes
         set beresp.ttl = 120s;
         set beresp.uncacheable = true;
     }
@@ -246,15 +235,7 @@ sub vcl_deliver {
     if (resp.http.Cache-Control !~ "private" && req.url !~ "^/(pub/)?(media|static)/" && obj.ttl > 0s) {
         set resp.http.Cache-Control = "must-revalidate, max-age=60";
     }
-    
-    # Prevent browser caching for customer and checkout pages
-    if (req.url ~ "^/(customer|checkout)(/|$)") {
-        set resp.http.Cache-Control = "no-store, no-cache, must-revalidate";
-    }
 
-    if (!resp.http.X-Magento-Debug) {
-        unset resp.http.Age;
-    }
     unset resp.http.XKey;
     unset resp.http.Expires;
     unset resp.http.Pragma;
