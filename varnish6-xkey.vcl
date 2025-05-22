@@ -39,7 +39,7 @@ sub vcl_recv {
     }
 
     # Sorts query string parameters alphabetically for cache normalization purposes, only when there are multiple parameters
-    if (req.url ~ "\?.*&") {
+    if (req.url ~ "\?.+&.+") {
         set req.url = std.querysort(req.url);
     }
 
