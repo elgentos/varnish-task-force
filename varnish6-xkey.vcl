@@ -72,7 +72,7 @@ sub vcl_recv {
     # If X-Magento-Tags-Pattern is not set, a URL-based purge is executed
     if (req.method == "PURGE") {
         if (client.ip !~ purge) {
-            return (synth(405, "Method not allowed"));
+            return (synth(405));
         }
         # To use the X-Pool header for purging varnish during automated deployments, make sure the X-Pool header
         # has been added to the response in your backend server config. This is used, for example, by the
