@@ -225,15 +225,6 @@ sub vcl_backend_response {
     if (beresp.ttl > 0s && (bereq.method == "GET" || bereq.method == "HEAD")) {
         unset beresp.http.Set-Cookie;
     }
-    
-   # If page is not cacheable then bypass varnish for 2 minutes as Hit-for-Miss
-   if (beresp.ttl <= 0s ||
-        beresp.http.Surrogate-control ~ "no-store" ||
-        (!beresp.http.Surrogate-Control && beresp.http.Vary == "*")) {
-        # Mark as Hit-for-Miss for the next 2 minutes
-        set beresp.ttl = 120s;
-        set beresp.uncacheable = true;
-    }
 }
 
 sub vcl_deliver {
