@@ -45,9 +45,11 @@ sub vcl_recv {
         set req.url = regsub(req.url, "\?$", "");
     }
 
-    # Remove port number from host header
-    set req.http.Host = regsub(req.http.Host, ":[0-9]+", "");
-    
+    # Remove port number from host header if set
+    if (req.http.Host ~ ":[0-9]+$") {
+        set req.http.Host = regsub(req.http.Host, ":[0-9]+$", "");
+    }
+
     # Sorts query string parameters alphabetically for cache normalization purposes    
     set req.url = std.querysort(req.url);
     
