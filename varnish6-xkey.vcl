@@ -231,6 +231,9 @@ sub vcl_deliver {
     # Let browser and Cloudflare cache non-static content that are cacheable for short period of time
     if (resp.http.Cache-Control !~ "private" && req.url !~ "^/(media|static)/" && obj.ttl > 0s) {
         set resp.http.Cache-Control = "must-revalidate, max-age=60";
+        if ( 0 ) { # TODO MAKE CONFIGURABLE: Enable/disable backward-forward cache (default enabled)
+            set resp.http.Cache-Control = resp.http.Cache-Control + ", no-store";
+        }
     }
 
     unset resp.http.XKey;
