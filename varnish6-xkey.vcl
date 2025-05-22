@@ -70,7 +70,7 @@ sub vcl_recv {
             } else {
                 set req.http.n-gone = xkey.purge("all");
             }
-            return (synth(200, "Invalidated " + req.http.n-gone + " objects (full flush)"));
+            return (synth(200, "Invalidated " + req.http.n-gone + " objects - full flush"));
         } elseif (req.http.X-Magento-Tags-Pattern) {
             # replace "((^|,)cat_c(,|$))|((^|,)cat_p(,|$))" to be "cat_c,cat_p"
             set req.http.X-Magento-Tags-Pattern = regsuball(req.http.X-Magento-Tags-Pattern, "[^a-zA-Z0-9_-]+" ,",");
