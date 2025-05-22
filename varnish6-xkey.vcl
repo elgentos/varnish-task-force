@@ -103,7 +103,7 @@ sub vcl_recv {
     }
 
     # Bypass health check requests
-    if (req.url == "health_check.php") {
+    if (req.url == "/health_check.php") {
         return (pass);
     }
 
