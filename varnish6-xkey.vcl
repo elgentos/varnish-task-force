@@ -84,7 +84,7 @@ sub vcl_recv {
         if (req.http.X-Magento-Tags-Pattern == ".*") {
             ban("obj.http.X-Magento-Tags ~ " + req.http.X-Magento-Tags-Pattern);
         } elseif (req.http.X-Magento-Tags-Pattern) {
-            # replace "((^|,)cat_c(,|$))|((^|,)cat_p(,|$))" to be "cat_c cat_p"
+            # replace "((^|,)cat_c(,|$))|((^|,)cat_p(,|$))" to be "cat_c,cat_p"
             set req.http.X-Magento-Tags-Pattern = regsuball(req.http.X-Magento-Tags-Pattern, "[^a-zA-Z0-9_-]+" ,",");
             set req.http.X-Magento-Tags-Pattern = regsuball(req.http.X-Magento-Tags-Pattern, "(^,*)|(,*$)" ,"");
             set req.http.n-gone = xkey.softpurge(req.http.X-Magento-Tags-Pattern);
