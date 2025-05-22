@@ -128,12 +128,22 @@ sub vcl_recv {
         set req.url = regsub(req.url, "[?|&]+$", "");
     }
 
+    # Media files caching
+    # TODO MAKE CONFIGURABLE
+    if (req.url ~ "^/(pub/)?media/") {
+        return (pass);
+
+        #unset req.http.Https;
+        #unset req.http./* {{ ssl_offloaded_header }} */;
+        #unset req.http.Cookie;
+    }
+
     # Static files caching
-    if (req.url ~ "^/(pub/)?(media|static)/") {
+    # TODO MAKE CONFIGURABLE
+    if (req.url ~ "^/(pub/)?static/") {
         # Static files should not be cached by default
         return (pass);
 
-        # But if you use a few locales and don't use CDN you can enable caching static files by commenting previous line (#return (pass);) and uncommenting next 3 lines
         #unset req.http.Https;
         #unset req.http./* {{ ssl_offloaded_header }} */;
         #unset req.http.Cookie;
