@@ -63,7 +63,11 @@ sub vcl_recv {
 
         # Full Page Cache flush
         if (req.http.X-Magento-Tags-Pattern == ".*") {
-            set req.http.n-gone = xkey.softpurge("all");
+            if (0) { # CONFIGURABLE: soft purge
+                set req.http.n-gone = xkey.softpurge("all");
+            } else {
+                set req.http.n-gone = xkey.purge("all");
+            }
             return (synth(200, "Invalidated " + req.http.n-gone + " objects (full flush)"));
         } elseif (req.http.X-Magento-Tags-Pattern) {
             # replace "((^|,)cat_c(,|$))|((^|,)cat_p(,|$))" to be "cat_c,cat_p"
