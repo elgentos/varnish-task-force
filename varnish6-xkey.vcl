@@ -183,8 +183,8 @@ sub vcl_backend_response {
         set beresp.http.Grace = beresp.grace;
         # set space separated xkey
         set beresp.http.XKey = regsuball(beresp.http.X-Magento-Tags, ",", " ") + " all";
-        # reset beresp.http.X-Magento-Tags with some common general value
-        set beresp.http.X-Magento-Tags = "fpc";
+        # remove X-Magento-Tags, no longer needed
+        unset beresp.http.X-Magento-Tags;
     }
 
     # All text-based content can be parsed as ESI
