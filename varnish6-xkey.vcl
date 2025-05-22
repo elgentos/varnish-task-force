@@ -66,7 +66,11 @@ sub vcl_recv {
 
         # Full Page Cache flush
         if (req.http.X-Magento-Tags-Pattern == ".*") {
-            ban("obj.http.X-Magento-Tags ~ " + req.http.X-Magento-Tags-Pattern);
+            if (0) { # CONFIGURABLE: soft purge
+                set req.http.n-gone = xkey.softpurge("all");
+            } else {
+                set req.http.n-gone = xkey.purge("all");
+            }
         } elseif (req.http.X-Magento-Tags-Pattern) {
             # replace "((^|,)cat_c(,|$))|((^|,)cat_p(,|$))" to be "cat_c,cat_p"
             set req.http.X-Magento-Tags-Pattern = regsuball(req.http.X-Magento-Tags-Pattern, "[^a-zA-Z0-9_-]+" ,",");
