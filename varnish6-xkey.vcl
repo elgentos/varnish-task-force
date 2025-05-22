@@ -77,7 +77,7 @@ sub vcl_recv {
         # To use the X-Pool header for purging varnish during automated deployments, make sure the X-Pool header
         # has been added to the response in your backend server config. This is used, for example, by the
         # capistrano-magento2 gem for purging old content from varnish during it's deploy routine.
-        if (!req.http.X-Magento-Tags-Pattern && !req.http.X-Pool) {
+        if (!req.http.X-Magento-Tags-Pattern) {
             return (purge);
         }
 
@@ -92,9 +92,6 @@ sub vcl_recv {
             return (synth(200, "Invalidated " + req.http.n-gone + " objects"));
         }
 
-        if (req.http.X-Pool) {
-          ban("obj.http.X-Pool ~ " + req.http.X-Pool);
-        }
         return (synth(200, "Purged"));
     }
 
